@@ -1,0 +1,146 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Enum Definitions
+enum GameStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+}
+
+enum RoundStatus {
+  ACTIVE
+  ENDED
+}
+
+enum PlayerStatus {
+  WAITING
+  READY
+  PLAYING
+  DISCONNECTED
+}
+
+// Models
+model Game {
+  game_id       Int        @id @default(autoincrement())
+  join_code     String     @unique
+  num_players   Int        @default(8)
+  min_players   Int        @default(2)
+  num_rounds    Int
+  current_round Int        @default(0)
+  status        GameStatus @default(WAITING)
+  created_at    DateTime   @default(now())
+  last_activity DateTime   @default(now()) @updatedAt
+  winner_id     Int?       // Optional winner reference
+
+  // Relationships
+  rounds        Round[]
+  players       Player[]
+  winner        Player?    @relation("GameWinner", fields: [winner_id], references: [player_id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status])         // Index for querying games by status
+  @@index([last_activity])   // Index for cleaning up inactive games
+  @@index([winner_id])
+}
+
+model Round {
+  round_id      Int         @id @default(autoincrement())
+  game_id       Int
+  round_number  Int
+  letter        String      @db.Char(1)
+  status        RoundStatus @default(ACTIVE)
+  start_time    DateTime    @default(now())
+  end_time      DateTime?   // Nullable for in-progress rounds
+
+  // Relationships
+  game          Game        @relation(fields: [game_id], references: [game_id], onDelete: Cascade)
+  responses     Response[]
+  scores        Score[]
+
+  // Constraints
+  @@unique([game_id, round_number]) // Ensure unique round numbers per game
+
+  @@index([game_id])
+  @@index([status])
+}
+
+model Player {
+  player_id      Int           @id @default(autoincrement())
+  game_id        Int
+  player_name    String
+  score          Int           @default(0)
+  is_host        Boolean       @default(false)
+  status         PlayerStatus  @default(WAITING)
+  joined_at      DateTime      @default(now())
+  last_active    DateTime      @default(now()) @updatedAt
+
+  // Relationships
+  game            Game         @relation(fields: [game_id], references: [game_id], onDelete: Cascade)
+  responses       Response[]
+  scoresGiven     Score[]      @relation("GivenScores")
+  scoresReceived  Score[]      @relation("ReceivedScores")
+  gamesWon        Game[]       @relation("GameWinner")
+
+  // Constraints
+  @@unique([game_id, player_name]) // Ensure unique player names per game
+
+  @@index([game_id])
+  @@index([status])
+  @@index([last_active])
+}
+
+model Response {
+  response_id   Int        @id @default(autoincrement())
+  round_id      Int
+  player_id     Int
+  name          String
+  place         String
+  animal        String
+  thing         String
+  submitted_at  DateTime?   // Nullable for unsubmitted responses
+
+  // Relationships
+  round         Round       @relation(fields: [round_id], references: [round_id], onDelete: Cascade)
+  player        Player      @relation(fields: [player_id], references: [player_id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([round_id, player_id]) // One response per player per round
+
+  @@index([round_id])
+  @@index([player_id])
+}
+
+model Score {
+  score_id         Int        @id @default(autoincrement())
+  round_id         Int
+  grader_id        Int
+  graded_player_id Int
+  category         String     // name, place, animal, or thing
+  points           Int
+
+  // Relationships
+  round            Round      @relation(fields: [round_id], references: [round_id], onDelete: Cascade)
+  grader           Player     @relation("GivenScores", fields: [grader_id], references: [player_id], onDelete: Cascade)
+  graded_player    Player     @relation("ReceivedScores", fields: [graded_player_id], references: [player_id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([round_id, grader_id, graded_player_id, category]) // One score per category per player per round
+
+  @@index([round_id])
+  @@index([grader_id])
+  @@index([graded_player_id])
+}
