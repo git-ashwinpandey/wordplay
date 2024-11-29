@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import useGameStore from '../../state/gameStore'
 
 const formSchema = z.object({
     username: z.string().min(2, {
@@ -44,11 +45,15 @@ const page = () => {
         },
     })
     const router = useRouter()
+    const { setPlayerName, playerName } = useGameStore();
     // 2. Define a submit handler.
     function onSubmit(values: z.infer<typeof formSchema>) {
         // Do something with the form values.
         // ✅ This will be type-safe and validated.
         console.log(values)
+        
+        setPlayerName(values.username)
+        console.log(playerName)
         router.push('/game-lobby')
     }
     return (
