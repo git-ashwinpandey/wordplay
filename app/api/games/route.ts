@@ -12,25 +12,24 @@ const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   console.log('POST /api/games -- creating new game')
-  const temp = await request.json()
-  console.log(temp)
   try {
-    const { joinCode, numPlayers, numRounds, playerName } = temp
-    const temp1 = {
-      join_code: joinCode,
-      num_players: 8,
-      min_players: 2,
-      num_rounds: numRounds,
-      current_round: 0,
-      status: PrismaGameStatus.WAITING as PrismaGameStatus | undefined,
-      created_at: new Date(),
-      last_activity: new Date()
-    } as Prisma.GameCreateInput
-    console.log(temp1)
+    const { joinCode, numPlayers, numRounds, playerName } = await request.json()
+
     const newGame = await prisma.game.create({
-      data: temp1,
+      data: {
+        join_code: joinCode,
+        num_players: 8,
+        min_players: 2,
+        num_rounds: numRounds,
+        current_round: 0,
+        status: PrismaGameStatus.WAITING as PrismaGameStatus | undefined,
+        created_at: new Date(),
+        last_activity: new Date()
+      },
     })
+
     console.log(newGame)
+
     const player = await prisma.player.create({
       data: {
         game_id: newGame.game_id,
@@ -42,6 +41,8 @@ export async function POST(request: Request) {
         last_active: new Date(),
       },
     })
+
+    console.log(player)
     return NextResponse.json({ newGame, player })
   } catch (error) {
     console.error('Error creating game:', error)
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching games:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch games', details: error.message || error },
+      { error: 'Failed to fetch games', details: (error as any).message || error },
       { status: 500 }
     );
   }
