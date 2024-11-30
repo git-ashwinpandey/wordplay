@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Copy, Users } from 'lucide-react'
 import { io, Socket } from 'socket.io-client'
 import { Button } from '@/components/ui/button'
-import router from 'next/router'
+import router, { useRouter } from 'next/navigation'
+import { set } from 'react-hook-form'
 
 const page = () => {
 	const [gameSettings, setGameSettings] = useState({
@@ -23,66 +24,69 @@ const page = () => {
 	}
 	
 	const [players, setPlayers] = useState<Player[]>([])
-	const { playerName, joinCode, setJoinCode } = useGameStore()
+	const { playerName, setPlayerName, joinCode, setPlayerID, playerID, setJoinCode } = useGameStore()
 	const [isLoaded, setIsLoaded] = useState(false)
 	const [error, setError] = useState('')
 	const [showCopiedAlert, setShowCopiedAlert] = useState(false)
 
+    const router = useRouter()
+
 	useEffect(() => {
 		// Wait for Zustand to rehydrate the joinCode
 		const rehydrateState = async () => {
-			const storedJoinCode = localStorage.getItem('game-storage')
-				? JSON.parse(localStorage.getItem('game-storage') as string).state
-						.joinCode
-				: ''
-
-			setJoinCode(storedJoinCode)
-
-			setIsLoaded(true) // Now state is considered loaded
-			console.log('rehydrated state')
-		}
-		console.log(`before rehydrate joincode: ${joinCode}`)
-		rehydrateState()
-		console.log(`after rehydrate joincode: ${joinCode}`)
-	}, [])
+            const storedData = localStorage.getItem('game-storage');
+            if (storedData) {
+                const state = JSON.parse(storedData).state || {};
+                setJoinCode(state.joinCode || '');
+                setPlayerID(state.playerID || -1);
+                setPlayerName(state.playerName || '');
+            }
+            setIsLoaded(true);
+        };
+        if (!isLoaded) {
+            rehydrateState();
+        }
+	}, [isLoaded])
 
 	useEffect(() => {
 		const createGame = async () => {
-			try {
-				const newJoinCode = cryptoRandomString({ length: 10, type: 'url-safe' })
-				setJoinCode(newJoinCode)
-				const response = await fetch('/api/games', {
-					method: 'POST',
-					headers: {
-						'CONTENT-TYPE': 'application/json',
-					},
-					body: JSON.stringify({
-						joinCode: newJoinCode,
-						numPlayers: players.length,
-						numRounds: gameSettings.numRounds,
-						playerName: playerName,
-					}),
-				})
-
-				if (!response.ok) {
-					console.error('Failed to create game')
-				}
-
-				const { newGame, player } = await response.json()
-				console.log(newGame)
-				console.log(player)
-			} catch (error) {
-				console.error('Error creating game:', error)
-				setError('Failed to create game')
-			}
-		}
-
-		console.log(`isLoaded: ${isLoaded}`)
-		console.log(`joinCode: ${joinCode}`)
-		if (isLoaded && joinCode === '') {
-			createGame()
-		}
-	}, [isLoaded, joinCode])
+            try {
+                const newJoinCode = cryptoRandomString({ length: 10, type: 'url-safe' });
+                setJoinCode(newJoinCode);
+    
+                const response = await fetch('/api/games', {
+                    method: 'POST',
+                    headers: { 'CONTENT-TYPE': 'application/json' },
+                    body: JSON.stringify({
+                        joinCode: newJoinCode,
+                        numPlayers: players.length,
+                        numRounds: gameSettings.numRounds,
+                        playerName: playerName,
+                    }),
+                });
+    
+                if (!response.ok) {
+                    throw new Error('Failed to create game');
+                }
+    
+                const { newGame, player } = await response.json();
+                setPlayerID(player.player_id);
+                console.log(newGame, player);
+            } catch (err) {
+                console.error('Error creating game:', err);
+                setError('Failed to create game');
+            }
+        };
+    
+        if (isLoaded) {
+            // Check initialization logic
+            if (!playerName) {
+                router.push('/create-game');
+            } else if (!joinCode || playerID === -1) {
+                createGame();
+            }
+        }
+	}, [isLoaded, playerName, joinCode, playerID])
 
     useEffect(() => {
         // Initialize socket connection
